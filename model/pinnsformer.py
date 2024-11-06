@@ -7,7 +7,7 @@ import torch.nn as nn
 import pdb
 
 from util import get_clones
-from act import *
+from model.act import *
 
 class FeedForward(nn.Module):
     def __init__(self, d_model, d_ff=256):

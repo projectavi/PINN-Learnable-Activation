@@ -4,7 +4,7 @@
 
 import torch
 import torch.nn as nn
-from act import *
+from model.act import *
 
         
 

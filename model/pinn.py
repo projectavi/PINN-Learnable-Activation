@@ -5,7 +5,7 @@
 
 import torch
 import torch.nn as nn
-from act import *
+from model.act import *
 from model.fls import SinAct
 
 
@@ -17,7 +17,7 @@ class PINNs(nn.Module):
         for i in range(num_layer-1):
             if i == 0:
                 layers.append(nn.Linear(in_features=in_dim, out_features=hidden_dim))
-                layers.append(SinAct)
+                layers.append(SinAct())
             else:
                 layers.append(nn.Linear(in_features=hidden_dim, out_features=hidden_dim))
                 layers.append(eval(f"{activation}()"))
