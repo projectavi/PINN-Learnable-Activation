@@ -1,5 +1,6 @@
 import os
 import pickle
+from idlelib.run import flush_stdout
 
 import numpy as np
 import torch
@@ -9,6 +10,7 @@ import random
 from torch.optim import LBFGS
 from tqdm import tqdm
 
+from model.fls import FLS
 from util import *
 from model.qres import QRes
 from model.pinn import PINNs
@@ -39,6 +41,7 @@ if __name__ == "__main__":
 
     pinns = {}
     qres = {}
+    fls = {}
     pinnsformer = {}
 
     device = 'cuda:0'
@@ -277,6 +280,113 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.savefig(f'./figs/1dreaction_qres_loss.png')
 
+    # FLS - 1D Reaction
+    for act in activations:
+        model = FLS(in_dim=2, hidden_dim=256, out_dim=1, num_layer=4, activation=act).to(device)
+
+        model.apply(init_weights)
+        optim = LBFGS(model.parameters(), line_search_fn='strong_wolfe')
+
+        for i in tqdm(range(epochs)):
+            def FLSclosure():
+                pred_res = model(x_res, t_res)
+                pred_left = model(x_left, t_left)
+                pred_right = model(x_right, t_right)
+                pred_upper = model(x_upper, t_upper)
+                pred_lower = model(x_lower, t_lower)
+
+                u_x = torch.autograd.grad(pred_res, x_res, grad_outputs=torch.ones_like(pred_res), retain_graph=True,
+                                          create_graph=True)[0]
+                u_t = torch.autograd.grad(pred_res, t_res, grad_outputs=torch.ones_like(pred_res), retain_graph=True,
+                                          create_graph=True)[0]
+
+                loss_res = torch.mean((u_t - 5 * pred_res * (1 - pred_res)) ** 2)
+                loss_bc = torch.mean((pred_upper - pred_lower) ** 2)
+                loss_ic = torch.mean(
+                    (pred_left[:, 0] - torch.exp(- (x_left[:, 0] - torch.pi) ** 2 / (2 * (torch.pi / 4) ** 2))) ** 2)
+
+                loss_track.append([loss_res.item(), loss_bc.item(), loss_ic.item()])
+
+                loss = loss_res + loss_bc + loss_ic
+                optim.zero_grad()
+                loss.backward()
+                return loss
+
+            optim.step(FLSclosure)
+
+        # Visualize PINNs
+        res_test = torch.tensor(res_test, dtype=torch.float32, requires_grad=True).to(device)
+        x_test, t_test = res_test[:, 0:1], res_test[:, 1:2]
+
+        with torch.no_grad():
+            pred = model(x_test, t_test)[:, 0:1]
+            pred = pred.cpu().detach().numpy()
+
+        pred = pred.reshape(101, 101)
+
+        res_test, _, _, _, _ = get_data([0, 2 * np.pi], [0, 1], 101, 101)
+        u = u_ana(res_test[:, 0], res_test[:, 1]).reshape(101, 101)
+
+        rl1 = np.sum(np.abs(u - pred)) / np.sum(np.abs(u))
+
+        rl2 = np.sqrt(np.sum((u - pred) ** 2) / np.sum(u ** 2))
+
+        print('relative L1 error: {:4f}'.format(rl1))
+        print('relative L2 error: {:4f}'.format(rl2))
+
+        fls[act] = {
+            "loss": loss_track,
+            "L1 error": rl1,
+            "L2 error": rl2
+        }
+
+        plt.figure(figsize=(4, 3))
+        plt.imshow(pred, extent=[0, np.pi * 2, 1, 0], aspect='auto')
+        plt.xlabel('x')
+        plt.ylabel('t')
+        plt.title('Predicted u(x,t)')
+        plt.colorbar()
+        plt.tight_layout()
+        plt.savefig(f'./figs/1dreaction_fls_pred_{act}.png')
+
+        plt.figure(figsize=(4, 3))
+        plt.imshow(u, extent=[0, np.pi * 2, 1, 0], aspect='auto')
+        plt.xlabel('x')
+        plt.ylabel('t')
+        plt.title('Exact u(x,t)')
+        plt.colorbar()
+        plt.tight_layout()
+        plt.savefig('./figs/1dreaction_exact.png')
+
+        plt.figure(figsize=(4, 3))
+        plt.imshow(np.abs(pred - u), extent=[0, np.pi * 2, 1, 0], aspect='auto')
+        plt.xlabel('x')
+        plt.ylabel('t')
+        plt.title('Absolute Error')
+        plt.colorbar()
+        plt.tight_layout()
+        plt.savefig(f'./figs/1dreaction_fls_error_{act}.png')
+
+    with open(f'./results/1dreaction_fls.pkl', 'wb') as f:
+        pickle.dump(fls, f)
+
+    # Plot all Losses
+    minval = -1
+    minactfls = None
+    plt.figure(figsize=(4, 3))
+    for act in activations:
+        loss = [np.sum(l) for l in fls[act]["loss"]]
+        plt.plot(loss, label=act)
+        if minval == -1 or minval > np.sum(loss[-1]):
+            minval = np.sum(loss[-1])
+            minactfls = act
+    plt.yscale('log')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'./figs/1dreaction_fls_loss.png')
+
     # PINNsformer - 1D Reaction
     model = PINNsformer(d_out=1, d_hidden=512, d_model=32, N=1, heads=2).to(device)
 
@@ -374,6 +484,8 @@ if __name__ == "__main__":
     plt.plot(loss, label=f'PINNs {minactpinns}')
     loss = [np.sum(l) for l in qres[minactqres]["loss"]]
     plt.plot(loss, label=f'QRes {minactqres}')
+    loss = [np.sum(l) for l in fls[minactfls]["loss"]]
+    plt.plot(loss, label=f'FLS {minactfls}')
     loss = [np.sum(l) for l in pinnsformer["loss"]]
     plt.plot(loss, label='PINNsformer')
     plt.yscale('log')

@@ -9,7 +9,7 @@ from model.act import *
         
 
 class FLS(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, num_layer):
+    def __init__(self, in_dim, hidden_dim, out_dim, num_layer, activation):
         super(FLS, self).__init__()
 
         layers = []
@@ -19,7 +19,7 @@ class FLS(nn.Module):
                 layers.append(SinAct())
             else:
                 layers.append(nn.Linear(in_features=hidden_dim, out_features=hidden_dim))
-                layers.append(nn.Tanh())
+                layers.append(eval(f"{activation}()"))
 
         layers.append(nn.Linear(in_features=hidden_dim, out_features=out_dim))
 
