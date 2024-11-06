@@ -153,6 +153,23 @@ if __name__ == "__main__":
     with open(f'./results/1dreaction_pinns.pkl', 'wb') as f:
         pickle.dump(pinns, f)
 
+    # Plot all Losses
+    minval = -1
+    minactpinns = None
+    plt.figure(figsize=(4, 3))
+    for act in activations:
+        loss = [np.sum(l) for l in pinns[act]["loss"]]
+        plt.plot(loss, label=act)
+        if minval == -1 or minval > np.sum(loss[-1]):
+            minval = np.sum(loss[-1])
+            minactpinns = act
+    plt.yscale('log')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'./figs/1dreaction_pinns_loss.png')
+
     # QRes - 1D Reaction
 
     for act in activations:
@@ -242,6 +259,23 @@ if __name__ == "__main__":
 
     with open(f'./results/1dreaction_qres.pkl', 'wb') as f:
         pickle.dump(qres, f)
+
+    # Plot all Losses
+    minval = -1
+    minactqres = None
+    plt.figure(figsize=(4, 3))
+    for act in activations:
+        loss = [np.sum(l) for l in qres[act]["loss"]]
+        plt.plot(loss, label=act)
+        if minval == -1 or minval > np.sum(loss[-1]):
+            minval = np.sum(loss[-1])
+            minactqres = act
+    plt.yscale('log')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'./figs/1dreaction_qres_loss.png')
 
     # PINNsformer - 1D Reaction
     model = PINNsformer(d_out=1, d_hidden=512, d_model=32, N=1, heads=2).to(device)
@@ -333,3 +367,18 @@ if __name__ == "__main__":
 
     with open(f'./results/1dreaction_pinnsformer.pkl', 'wb') as f:
         pickle.dump(pinnsformer, f)
+
+    # Plot the best PINN and best QRes against PINNSformer
+    plt.figure(figsize=(4, 3))
+    loss = [np.sum(l) for l in pinns[minactpinns]["loss"]]
+    plt.plot(loss, label=f'PINNs {minactpinns}')
+    loss = [np.sum(l) for l in qres[minactqres]["loss"]]
+    plt.plot(loss, label=f'QRes {minactqres}')
+    loss = [np.sum(l) for l in pinnsformer["loss"]]
+    plt.plot(loss, label='PINNsformer')
+    plt.yscale('log')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'./figs/1dreaction_best.png')
