@@ -4,14 +4,7 @@
 
 import torch
 import torch.nn as nn
-
-
-class SinAct(nn.Module):
-    def __init__(self):
-            super(SinAct, self).__init__() 
-
-    def forward(self, x):
-        return torch.sin(x)
+from act import *
 
         
 
